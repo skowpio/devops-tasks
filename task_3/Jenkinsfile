@@ -1,0 +1,72 @@
+def sendTeams(status) {
+  sh "echo Here we should have some notifications like slack etc"
+}
+
+pipeline {
+    agent any
+    parameters {
+        string(name: 'APP_VERSION', defaultValue: '0.0.1', description: 'User should provide app version')
+    }
+    environment {
+        COMPONENT = 'litecoin'
+        DOCKER_REGISTRY = "10.210.1.243:5000"
+    }
+
+    triggers {
+        gitlab(triggerOnPush: true,
+                triggerOnMergeRequest: true,
+                branchFilterType: 'All')
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                sh 'cd kraken/task_1'
+                sh 'docker build -t ${DOCKER_REGISTRY}/${COMPONENT}:${APP_VERSION} -f Dockerfile .'
+                sh 'docker push -t ${DOCKER_REGISTRY}/${COMPONENT}:${APP_VERSION}'
+            }
+            # optional
+            post {
+                success {
+                    updateGitlabCommitStatus name: STAGE_NAME, state: 'success'
+                }
+                failure {
+                    updateGitlabCommitStatus name: STAGE_NAME, state: 'failed'
+                }
+                aborted {
+                    updateGitlabCommitStatus name: STAGE_NAME, state: 'canceled'
+                }
+            }
+
+        }
+        stage('Anchor scan') {
+          steps {
+            withCredentials([string(credentialsId: 'ANCHORE_CLI_PASS', variable: 'ANCHORE_CLI_PASS'), string(credentialsId: 'ANCHORE_CLI_USER', variable: 'ANCHORE_CLI_USER')]) {
+              sh 'anchore-cli image add ${DOCKER_REGISTRY}/${COMPONENT}:${APP_VERSION}'
+              sh 'anchore-cli image vuln ${DOCKER_REGISTRY}/${COMPONENT}:${APP_VERSION} all'
+            }
+          }
+
+        }
+        # ugly as hell, we should really use HELM for that with his vars and templates
+        stage('Deploy') {
+          steps {
+            sh """sed -e s",10.210.1.243:5000/litecoin:0.18.1,${DOCKER_REGISTRY}/${COMPONENT}:${APP_VERSION}," -i kraken/task_2/statefulset.yml"""
+            sh """sed -e s",0.18.1,${APP_VERSION}," kraken/task_2/statefulset.yml"""
+            sh 'kubectl apply -f kraken/task_2/statefulset.yml'
+          }
+        }
+    }
+
+    post {
+        success {
+            sendTeams('Success')
+        }
+        unstable {
+            sendTeams('Unstable')
+        }
+        failure {
+            sendTeams('Failed')
+        }
+    }
+}
