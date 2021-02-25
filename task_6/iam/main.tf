@@ -19,7 +19,7 @@ module "empty_iam_policy" {
   name        = "${local.prefix_name}-policy"
   description = "Emty policy"
 
-  policy = "${data.template_file.policy.rendered}"
+  policy = data.template_file.policy.rendered
 }
 
 module "iam_assumable_role_custom" {
@@ -45,6 +45,6 @@ module "iam_group_with_custom_policies" {
   name = "${local.prefix_name}-group"
 
   custom_group_policy_arns = [
-    "${module.empty_iam_policy.arn}"
+    module.empty_iam_policy.arn
   ]
 }
