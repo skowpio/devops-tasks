@@ -1,5 +1,6 @@
 # Notes
 - I did not find a way to add wild cardinto trust relantionship policy for the role, it has to be a specific user
+- *we can add data block which will run script, get all users from AWS API and then add them to above trust relantionship
 - user which is allowed to assume that role is defined in values/dev-kraken.tfvars
 - account_id comes from cli param
 
